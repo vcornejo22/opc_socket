@@ -1,8 +1,8 @@
-import socket, json, threading
+import socket, json, threading, time
 import paho.mqtt.client as mqtt
 
 msg_payload = 0
-msg_topic = 'Value'
+msg_topic = ''
 host = '192.168.0.100'
 port_socket = 10000
 port_mqtt = 1883
@@ -21,6 +21,22 @@ def on_message(client, userdata ,message):
     msg_payload = (message.payload.decode('utf-8'))
     msg_topic = message.topic
     
+class thread_server(threading.Thread):
+    def __init__(self, conn, address, client_mqtt):
+        threading.Thread.__init__(self)
+        self.conn = conn
+        self.address = address
+        self.client_mqtt = client_mqtt
+        
+    def run(self):
+         while True:
+            self.client_mqtt.loop_start()
+            self.client_mqtt.subscribe('Applications.NTest.Test2.in')
+            self.client_mqtt.loop_stop() 
+            if msg_payload != 0:
+                message_json = json.dumps({'topic': msg_topic, 'value': msg_payload})
+                self.conn.sendall(bytes(message_json, encoding='utf-8'))
+            time.sleep(1)
 def main():
     # Configuration server socker
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -34,22 +50,14 @@ def main():
     client_mqtt.on_connect = on_connect
     client_mqtt.connect(host, port=port_mqtt)
     path = 'Applications.NTest.Test1_1.PulseGenerator_1.Enable'
+    thread = thread_server(conn, address, client_mqtt)
+    thread.start()
     while True:
-        message_socket = conn.recv(1024).decode('utf-8')
+        message_socket = conn.recv(4096).decode('utf-8')
         if message_socket:
             client_mqtt.publish('server', message_socket)
             # print(message_socket)
-        client_mqtt.loop_start()
-        client_mqtt.subscribe('Applications.NTest.Test2.in')
-        client_mqtt.loop_stop()
-        message_json = {'name': msg_topic, 'value': msg_payload}
-        send_json = json.dumps(message_json)
-        if msg_payload == 0:
-            conn.sendall(bytes(send_json, encoding='utf-8'))
-        else: 
-            conn.sendall(bytes(send_json, encoding='utf-8'))
-            
-            
+   
     conn.close()
 if __name__ == '__main__':
     main()
